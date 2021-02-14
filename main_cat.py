@@ -32,9 +32,7 @@ from transcriptome_data import TranscriptomeDataset
 from wsi_data import load_labels, AggregatedDataset, TCGAFolder, \
     H5Dataset, patient_split, match_patient_split, \
     patient_kfold, match_patient_kfold
-from model import HE2RNA, fit, predict
-from utils import compute_metrics
-
+from model_cat import HE2RNA, fit, predict, compute_acc
 
 class Experiment(object):
     """An class that uses a config file to setup and run a gene expression
@@ -293,7 +291,7 @@ class Experiment(object):
         for project in np.unique(test_projects):
             pred = preds[test_projects == project]
             label = labels[test_projects == project]
-            report['correlation_' + project] = compute_metrics(
+            report['accuracy_' + project] = compute_acc(
                 label, pred)
 
         report = pd.DataFrame(report)
@@ -366,11 +364,11 @@ class Experiment(object):
             n_samples = {project: [] for project in dataset.projects}
 
         for k in range(n_folds):
-            print("current fold is: ",k)
 
             train_set = Subset(dataset, train_idx[k])
             test_set = Subset(evalset, test_idx[k])
-            print('train length: ',len(train_idx),'valid length: ',len(valid_idx),'test length: ',len(test_idx))
+            print(len(train_idx),len(valid_idx),len(test_idx))
+            
             if len(valid_idx) > 0:
                 valid_set = Subset(evalset, valid_idx[k])
                 valid_projects = dataset.projects[valid_idx[k]]
@@ -426,14 +424,13 @@ class Experiment(object):
                                 logdir=logdir,
                                 path=os.path.join(
                                     self.savedir,
-                                    'model_' + str(k)),
-                                cross_validation_fold=k)
+                                    'model_' + str(k)))
 
             # Compute metrics for each fold
             for project in np.unique(test_projects):
                 pred = preds[test_projects == project]
                 label = labels[test_projects == project]
-                report['correlation_' + project + '_fold_' + str(k)] = compute_metrics(
+                report['accuracy_' + project + '_fold_' + str(k)] = compute_acc(
                     label, pred)
 
         report = pd.DataFrame(report)

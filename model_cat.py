@@ -24,7 +24,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
-import utils
+from sklearn.metrics import accuracy_score
 
 
 class HE2RNA(nn.Module):
@@ -44,7 +44,7 @@ class HE2RNA(nn.Module):
     def __init__(self, input_dim, output_dim,
                  layers=[1], nonlin=nn.ReLU(), ks=[10],
                  dropout=0.5, device='cpu',
-                 bias_init=None, **kwargs):
+                 bias_init=None, mode='binary',**kwargs):
         super(HE2RNA, self).__init__()
 
         self.input_dim = input_dim
@@ -94,62 +94,62 @@ class HE2RNA(nn.Module):
         x = self.layers[-1](x)
         return x
 
-
-def training_epoch(model, dataloader, optimizer):
+def training_epoch_cat(model, dataloader, optimizer):
     """Train model for one epoch.
     """
     model.train()
-    loss_fn = nn.MSELoss()
+    loss_fn = nn.CrossEntropyLoss()
     train_loss = []
+    train_acc=[]
     for x, y in tqdm(dataloader):
         x = x.float().to(model.device)
-        y = y.float().to(model.device)
-        pred = model(x)
+        y = y.to(model.device)
+        pred = model(x).squeeze()
         loss = loss_fn(pred, y)
+        acc=compute_acc(pred, y)
         train_loss += [loss.detach().cpu().numpy()]
+        train_acc += acc.item()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
     train_loss = np.mean(train_loss)
-    return train_loss
+    train_acc = np.mean(train_acc)
+    return train_loss, train_acc
 
-def compute_correlations(labels, preds, projects):
-    '''
-    This function returns the mean correlations for different outcomes
-    '''
+def compute_acc(labels, preds, projects):
+    # The input preds is before softmax
     metrics = []
     for project in np.unique(projects):
         for i in range(labels.shape[1]):
             y_true = labels[projects == project, i]
             if len(np.unique(y_true)) > 1:
-                y_prob = preds[projects == project, i]
-                metrics.append(np.corrcoef(y_true, y_prob)[0, 1])
+                y_pred = preds[projects == project, i]
+                y_pred_tag = torch.log_softmax(y_pred, dim = 1)
+                _, y_pred_tags = torch.max(y_pred_tag, dim = 1)
+                metrics.append(accuracy_score(y_true, y_pred_tags))
     metrics = np.asarray(metrics)
     return np.mean(metrics)
 
-
-def evaluate(model, dataloader, projects):
+def evaluate_cat(model, dataloader, projects):
     """Evaluate the model on the validation set and return loss and metrics.
     """
     model.eval()
-    loss_fn = nn.MSELoss()
+    loss_fn = nn.CrossEntropyLoss()
     valid_loss = []
     preds = []
     labels = []
     for x, y in dataloader:
-        pred = model(x.float().to(model.device))
+        pred = model(x.float().to(model.device)).squeeze()
         labels += [y]
-        loss = loss_fn(pred, y.float().to(model.device))
+        loss = loss_fn(pred, y.to(model.device))
         valid_loss += [loss.detach().cpu().numpy()]
         pred = nn.ReLU()(pred)
         preds += [pred.detach().cpu().numpy()]
     valid_loss = np.mean(valid_loss)
     preds = np.concatenate(preds)
-    print('evaluate preds: ',preds)
+    print(preds)
     labels = np.concatenate(labels)
-    print("evaluate labels: ",labels)
-    metrics = compute_correlations(labels, preds, projects)
-    print("evaluate metrics is: ", metrics)
+    metrics = compute_acc(labels, preds, projects)
     return valid_loss, metrics
 
 
@@ -177,8 +177,7 @@ def fit(model,
         optimizer=None,
         test_set=None,
         path=None,
-        logdir='./exp',
-        cross_validation_fold=None):
+        logdir='./exp'):
     """Fit the model and make prediction on evaluation set.
 
     Args:
@@ -202,7 +201,7 @@ def fit(model,
 
     default_params = {
         'max_epochs': 200,
-        'patience': 20,
+        'patience': 50,
         'batch_size': 16,
         'num_workers': 0}
     default_params.update(params)
@@ -229,12 +228,12 @@ def fit(model,
         optimizer = torch.optim.Adam(list(model.parameters()), lr=1e-3,
                                      weight_decay=0.)
 
-    metrics = 'correlations'
+    metrics = 'accuracy'
     epoch_since_best = 0
     start_time = time.time()
 
     if valid_set is not None:
-        valid_loss, best = evaluate(
+        valid_loss, best = evaluate_cat(
             model, valid_loader, valid_projects)
         print('{}: {:.3f}'.format(metrics, best))
         if np.isnan(best):
@@ -260,29 +259,22 @@ def fit(model,
             start_time = time.time()
 
             if valid_set is not None:
-                valid_loss, scores = evaluate(
+                valid_loss, scores = evaluate_cat(
                     model, valid_loader, valid_projects)
                 dic_loss['valid_loss'] = valid_loss
-                print("evaluate scores is: ", scores)
                 score = np.mean(scores)
-                if cross_validation_fold is not None:
-                    writer.add_scalars('runs_split'.format(cross_validation_fold),'data/losses',dic_loss,e)
-                    writer.add_scalar('runs_split{}'.format(cross_validation_fold),'data/metrics', score, e)
-                else:
-                    writer.add_scalars('data/losses',dic_loss,e)
-                    writer.add_scalar('data/metrics', score, e)
-
+                writer.add_scalars('data/losses',
+                                   dic_loss,
+                                   e)
+                writer.add_scalar('data/metrics', score, e)
                 print('loss: {:.4f}, val loss: {:.4f}'.format(
                     train_loss,
                     valid_loss))
                 print('{}: {:.3f}'.format(metrics, score))
             else:
-
-                if cross_validation_fold is not None:
-                    writer.add_scalars('runs_split{}'.format(cross_validation_fold),'data/losses',dic_loss,e)
-                else:
-                    writer.add_scalars('data/losses',dic_loss,e)
-
+                writer.add_scalars('data/losses',
+                                   dic_loss,
+                                   e)
                 print('loss: {:.4f}'.format(train_loss))
 
             if valid_set is not None:
@@ -313,7 +305,6 @@ def fit(model,
 
     if test_set is not None:
         preds, labels = predict(model, test_loader)
-        print("test correlation is: ",utils.compute_metrics(labels, preds))
     elif valid_set is not None:
         preds, labels = predict(model, valid_loader)
     else:

@@ -87,14 +87,18 @@ def display_heatmap(path_to_slide, coords, tile_scores, path=None):
     ims.set_clim(np.min(mask[mask > 0]), np.max(mask[mask > 0]))
     cbar.ax.tick_params(labelsize=16) 
 
-    if path is not None:
-        plt.savefig(path)
+    if os.path.isdir(path):
+        plt.savefig(os.path.join(path,'heatmap.png'))
     else:
-        plt.show()
+        os.mkdir(path)
+        plt.savefig(os.path.join(path,'heatmap.png'))
+
     plt.close()
 
 def compute_aucs_CRC(path_to_model, path_to_tiles):
     scores = []
+    #background, debris, adipose, smooth muscle, mucus, normal colon mucosa, 
+    # cancer-associated stroma, tumoral epithelium, and lymphocytes
     cats = ['LYM', 'ADI', 'STR', 'NORM', 'TUM', 'DEB', 'MUS', 'MUC', 'BACK']
     for cat in tqdm(cats):
         all_scores = []
@@ -172,10 +176,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment", help="dataset on which to carry spatialization experiment, CRC or PESO")
     parser.add_argument("--path_to_model", help="path to the folder containing the models trained by cross-validation",
-                        default='epithelium_selection')
+                        default='EGFR_LGG_GBM')
     parser.add_argument("--path_to_tiles", help="path to folder containing .npy files of tile features")
+    parser.add_argument("--path_to_tile_features", help="path to one .npy file of tile features",default="/nfs/turbo/umms-ukarvind/peijinhan/TCGA_tiles/TCGA_LGG/0.50_mpp/TCGA-HT-8113-01Z-00-DX1.npy")
+    parser.add_argument("--path_to_slide", help="path to one slide",default="/nfs/turbo/umms-ukarvind/shared_data/TCGA-LGG_SVS_Raw/TCGA-HT-8113-01Z-00-DX1.641F5405-47CF-41C6-8EA4-4ABD6C677A46.svs")
     parser.add_argument("--path_to_masks", help="path to folder containing training masks from PESO")
     parser.add_argument("--corr", help="type of correlation to compute, pearson or spearman", default='pearson')
+    parser.add_argument("--save_heatmap", help="save heatmap to folder", default='/nfs/turbo/umms-ukarvind/peijinhan/HE2RNA_code/results/lgg_gbm_egfr')
     args = parser.parse_args()
     if args.experiment == 'CRC':
         compute_aucs_CRC(args.path_to_model, args.path_to_tiles)
@@ -183,6 +190,10 @@ def main():
         compute_correlation_PESO(args.path_to_model, args.path_to_tiles, args.path_to_masks, args.corr)
     else:
         print("unrecognized experiment")
+
+    # path to slide and path to .npy should be same
+    coords, tile_scores=compute_heatmap(args.path_to_model, args.path_to_tile_features)
+    display_heatmap(args.path_to_slide,coords,tile_scores,path=args.save_heatmap)
 
 if __name__ == '__main__':
 

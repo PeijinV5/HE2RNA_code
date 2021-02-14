@@ -1,0 +1,8 @@
+.DS_Store
+exp*
+model.pt
+tile_coordinates*
+.smb*
+*.sh
+slurm*
+test.py

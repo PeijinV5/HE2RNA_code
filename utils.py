@@ -18,14 +18,23 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import numpy as np
 import pickle as pkl
 from joblib import Parallel, delayed
+from scipy import stats
+from sklearn.metrics import accuracy_score
 
 def corr(pred, label, i):
-    return np.corrcoef(
-        label[:, i],
-        pred[:, i])[0, 1]
+    return round(stats.pearsonr(label[:, i], pred[:, i])[0],4), round(stats.pearsonr(label[:, i], pred[:, i])[1],4)
+
+def accuracy(pred, label, i):
+    return accuracy_score(label[:,i], y_pred[:,i])
 
 def compute_metrics(label, pred):
     res = Parallel(n_jobs=16)(
         delayed(corr)(pred, label, i) for i in range(label.shape[1])
+    )
+    return res
+
+def compute_metrics_acc(pred, label):
+    res = Parallel(n_jobs=16)(
+        delayed(accuracy)(pred, label, i) for i in range(label.shape[1])
     )
     return res

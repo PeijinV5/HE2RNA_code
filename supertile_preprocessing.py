@@ -76,6 +76,8 @@ def cluster_dataset(dataset, n_tiles=100,
     file.close()
         
 def main():
+    code = os.system('nvidia-smi')
+    print('code is '+ str(code))
     parser = argparse.ArgumentParser()
     parser.add_argument("--path_to_transcriptome", help="path to transcriptome data saved as a csv file",
                         default='data/TCGA_transcriptome/all_transcriptomes.csv')
@@ -83,6 +85,8 @@ def main():
                         default='data/TCGA_slic_100.h5')
     parser.add_argument("--n_tiles", help="number of supertiles",
                         default=100, type=int)
+    parser.add_argument("--genes", help="list of genes",
+                        default=100, type=int)                   
     args = parser.parse_args()
     rna_data = TranscriptomeDataset.from_saved_file(args.path_to_transcriptome, genes=[])
     histo_data = TCGAFolder.match_transcriptome_data(rna_data)

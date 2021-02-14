@@ -14,9 +14,6 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-This file is modified by Peijin Han, specifically to extract tiles for files 
-in '/nfs/turbo/umms-ukarvind/shared_data/TCGA-LGG_SVS_RAW'
 """
 
 import tensorflow as tf
@@ -49,11 +46,11 @@ def extract_tile_features(level, coord, zoom):
     tile = np.array(tile)
     return tile
 
-def save_numpy_features(path2slides, slidename, coords, path):
+def save_numpy_features(path2slides, folder, slidename, coords, path):
     model = ResNet50(weights='imagenet', include_top=True)
     model = Model(inputs=model.inputs, outputs=model.get_layer('avg_pool').output)
 
-    slide = openslide.OpenSlide(os.path.join(path2slides, slidename))
+    slide = openslide.OpenSlide(os.path.join(path2slides, folder, slidename))
     zoom = openslide.deepzoom.DeepZoomGenerator(slide, tile_size=224, overlap=0)
     level = int(coords[0, 0])
     tiles = np.array([extract_tile_features(level, coord, zoom) for coord in tqdm(coords)])
@@ -64,32 +61,26 @@ def save_numpy_features(path2slides, slidename, coords, path):
 
 def process_all_slides(path2slides, tile_coords, path):
 
-    #subfolder = {}
-    #slide_dirs = [d for d in os.listdir(path2slides) if os.path.isdir(os.path.join(path2slides, d))]
+    subfolder = {}
+    slide_dirs = [d for d in os.listdir(path2slides) if os.path.isdir(os.path.join(path2slides, d))]
 
     slidenames = []
-    #subfolders = []
-    existnames=[]
+    subfolders = []
 
-    for nf in os.listdir(os.path.join(path, '0.50_mpp')):
-        existnames.append(nf)
-
-    #for d in slide_dirs:
-    for f in os.listdir(path2slides):
-        if f.endswith('.svs') and 'mask' not in f and f.split('.')[0]+'.npy' not in existnames:
-            slidenames.append(f)
-            #subfolders.append(d)
-
-    print(len(slidenames))
+    for d in slide_dirs:
+        for f in os.listdir(os.path.join(path2slides, d)):
+            if f.endswith('.svs') or f.endswith('.tif') and 'mask' not in f:
+                slidenames.append(f)
+                subfolders.append(d)
 
     if not os.path.exists(path):
         os.mkdir(path)
     if not os.path.exists(os.path.join(path, '0.50_mpp')):
         os.mkdir(os.path.join(path, '0.50_mpp'))
 
-    for slidename in slidenames:
-        if slidename in tile_coords.keys():
-            save_numpy_features(path2slides, slidename, tile_coords[slidename], path)
+    for folder, slidename in zip(subfolders, slidenames):
+        if slidename in tile_coords.keys() and slidename.split('.')[0]+'.npy' not in os.listdir(os.path.join(path, '0.50_mpp')):
+            save_numpy_features(path2slides, folder, slidename, tile_coords[slidename], path)
         else:
             print(f'Warning: tile coordinates not found for file {slidename}, skipping it')
 
@@ -109,4 +100,4 @@ def main():
     
 if __name__ == '__main__':
 
-     main()
+    main()

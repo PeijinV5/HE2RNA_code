@@ -175,7 +175,7 @@ class TCGAFolder(Dataset):
         self.masks = masks
 
     @classmethod
-    def match_transcriptome_data(cls, transcriptome_dataset, binarize=False):
+    def match_transcriptome_data(cls, transcriptome_dataset, binarize=False,genes=None):
         projectname = transcriptome_dataset.projectname
         labels, cols, patients, projects = load_labels(transcriptome_dataset)
         file_list = [

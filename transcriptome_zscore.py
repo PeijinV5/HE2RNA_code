@@ -21,7 +21,6 @@ from pathlib import Path
 from tqdm import tqdm
 from constant import PATH_TO_TILES, PATH_TO_TRANSCRIPTOME
 
-
 class TranscriptomeDataset:
     """A class for dealing with RNAseq data and matching them with available
     slides.
@@ -32,7 +31,7 @@ class TranscriptomeDataset:
             available genes are used.
     """
 
-    def __init__(self, projectname=None, genes=None):
+    def __init__(self, projectname=['TCGA_LGG'], genes=None):
 
         self.projectname = projectname
         self.genes = genes
@@ -40,8 +39,7 @@ class TranscriptomeDataset:
         transcriptome_metadata = pd.read_csv(
             os.path.join(
                 'metadata',
-                'samples_description.csv'),
-            sep='\t')
+                'samples_description.csv'),sep='\t')
 
         # Select primary tumor samples from the chosen project
         if self.projectname is not None:
@@ -58,7 +56,7 @@ class TranscriptomeDataset:
         self._match_data()
 
     @classmethod
-    def from_saved_file(cls, path, projectname=None, genes=None):
+    def from_saved_file(cls, path, projectname=['TCGA_LGG'], genes=None):
         """Build TranscriptomeDataset instance from a saved csv file.
         """
         if genes is None:
@@ -83,7 +81,7 @@ class TranscriptomeDataset:
         """Find all slides tiled at a given level of a TCGA project and return a
         dataframe with their metadata.
         """
-
+        
         if subdirs is not None:
             df = []
             for subdir in subdirs:
@@ -112,9 +110,9 @@ class TranscriptomeDataset:
         self.image_metadata['Sample'] = self.image_metadata['Sample.ID_image'].apply(
             lambda x: x[:-1])
         self.transcriptome_metadata.drop('Project.ID', axis=1, inplace=True)
-        self.metadata = self.transcriptome_metadata.merge(
-            self.image_metadata[['Project.ID', 'Sample', 'Sample.ID_image', 'ID', 'Slide.ID']],
-            on='Sample')
+        self.metadata = pd.merge(self.transcriptome_metadata,
+            self.image_metadata[['Project.ID', 'Sample','Sample.ID_image', 'ID', 'Slide.ID']],
+            how='inner',on=['Sample'])
         # If several transcriptomes can be associated with a slide, pick only one.
         self.metadata = self.metadata.groupby('Slide.ID').first().reset_index()
         self.metadata.sort_values('Sample.ID', inplace=True)
@@ -123,32 +121,38 @@ class TranscriptomeDataset:
     def load_transcriptomes(self):
         """Select transcriptomic data of the selected project and genes.
         """
+        PATH_HE2RNA='/nfs/turbo/umms-ukarvind/peijinhan/HE2RNA_code'
         df = pd.read_csv(os.path.join(
-            PATH_TO_TRANSCRIPTOME,
-            'transcriptome_fpkmuq_allsamps.csv'), sep='\t', usecols=self.genes, index_col=0)
+            PATH_HE2RNA,
+            'cd3_zscore.csv'), usecols=self.genes, index_col=0)
+        print(df.shape)
+        print(self.transcriptome_metadata.shape)
+        print(self.image_metadata.shape)
+        print(self.metadata.shape)
 
-        df['File.ID'] = df.index
-        df = df.merge(self.metadata[['File.ID', 'Sample.ID',
-                                     'Case.ID', 'Project.ID']],
-                      on='File.ID', how='inner')
+        df = df.merge(self.metadata[['File.ID','Sample.ID',
+                                     'Case.ID', 'Project.ID','Slide.ID']],
+                      on=['Case.ID'], how='inner')
+        print(df.shape)
         df.sort_values('Sample.ID', inplace=True)
         df.reset_index(inplace=True, drop=True)
+        print(df.shape)
+        df=df.drop_duplicates(subset=['Slide.ID'])
         self.transcriptomes = df
+        print(df.shape)
 
         
 def main():
-    #df = []
     path = Path(PATH_TO_TRANSCRIPTOME)
-    # for f in tqdm(path.glob('*/*.txt')):
-    #     if "annotations.txt" in str(f):continue
-    #     df_ = pd.read_csv(f, sep='\t', header=None, index_col=0)
-    #     df_.columns = [str(f).split('/')[-2]]
-    #     df.append(df_.T)
-    # df = pd.concat(df)
-    # df.to_csv(path / 'transcriptome_fpkmuq_allsamps.csv', index=True, sep='\t')
     dataset = TranscriptomeDataset()
+    # duplicateRowsDF = dataset.transcriptome_metadata[dataset.transcriptome_metadata.duplicated(['Sample.ID'])]
+    # print(duplicateRowsDF.shape) # sample ID should be unique in LGG
+    # duplicateRowsDF = dataset.image_metadata[dataset.image_metadata.duplicated(['Sample.ID_image'])]
+    # print(duplicateRowsDF.shape) #Sample.ID_image is not unique
+    # dataset.image_metadata.to_csv('metadata/image_metadata.csv',index=False)
+
     dataset.load_transcriptomes()
-    dataset.transcriptomes.to_csv(path / 'all_transcriptomes_gbm_lgg.csv', index=False)
+    dataset.transcriptomes.to_csv(path / 'all_transcriptomes.csv', index=False)
 
 if __name__ == '__main__':
 
