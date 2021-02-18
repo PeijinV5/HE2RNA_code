@@ -1,4 +1,4 @@
-# This file is the instruction for running the HE2RNA code on Great Lakes
+# This file is the instruction for running the HE2RNA code on Great Lakes. The original code can be found here: https://github.com/owkin/HE2RNA_code.
 # Note that you probably need to specify the correct path
 
 # Gene expression prediction
