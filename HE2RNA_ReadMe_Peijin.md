@@ -1,5 +1,4 @@
 # This file is the instruction for running the HE2RNA code on Great Lakes
-# Created by Peijin Han on Jan 29, 2021
 # Note that you probably need to specify the correct path
 
 # Gene expression prediction
@@ -18,7 +17,7 @@ conda create -n env
 conda activate env
 
 # Install required packages
-cd /nfs/turbo/umms-ukarvind/peijinhan/HE2RNA_code
+cd <turbo drive>/<your name>/HE2RNA_code
 pip install -r requirements1.txt
 
 # Find CUDA path
@@ -56,11 +55,11 @@ Paths to folders containing slides, tile features and RNAseq data should be cons
 #### Download TCGA slides (if needed)
 Go to the dedicated folder to store files (all FFPE slides from TCGA is approx. 10To)
 ```bash
-cd /nfs/turbo/umms-ukarvind/shared_data/TCGA-LGG_SVS_Raw
+cd <turbo drive>/shared_data/TCGA-LGG_SVS_Raw
 ```
 Download images using the corresponding manifest:
 ```bash
-gdc-client download -m ../peijinhan/HE2RNA_code/gdc_manifests/gdc_manifest.2018-06-26_TCGA-LGG.txt
+gdc-client download -m ../<your name>/HE2RNA_code/gdc_manifests/gdc_manifest.2018-06-26_TCGA-LGG.txt
 
 ```
 
@@ -68,12 +67,12 @@ gdc-client download -m ../peijinhan/HE2RNA_code/gdc_manifests/gdc_manifest.2018-
 
 The code in extract_tile_features_from_slides.py is designed to extract resnet features of tile images directly from whole-slide images, using the coordinates of the tiles in Openslide format. To extract tile features from WSIs from a given TCGA project, e.g. LGG, run:
 ```bash
-cd /nfs/turbo/umms-ukarvind/peijinhan
+cd <turbo drive>/<your name>
 mkdir TCGA_tiles/
 
-python extract_tile_features_from_slides.py --path_to_slides /nfs/turbo/umms-ukarvind/shared_data/TCGA-LGG_SVS_Raw --tile_coordinates /nfs/turbo/umms-ukarvind/peijinhan/HE2RNA_code/tile_coordinates/tile_coordinates_TCGA_LGG.pkl --path_to_save_features /nfs/turbo/umms-ukarvind/peijinhan/TCGA_tiles/TCGA_LGG
+python extract_tile_features_from_slides.py --path_to_slides <turbo drive>/shared_data/TCGA-LGG_SVS_Raw --tile_coordinates <turbo drive>/<your name>/HE2RNA_code/tile_coordinates/tile_coordinates_TCGA_LGG.pkl --path_to_save_features <turbo drive>/<your name>/TCGA_tiles/TCGA_LGG
 
-python extract_tile_features_from_slides_ori.py --path_to_slides /nfs/turbo/umms-ukarvind/shared_data/TCGA-GBM_SVS_Raw --tile_coordinates /nfs/turbo/umms-ukarvind/peijinhan/HE2RNA_code/tile_coordinates/tile_coordinates_TCGA_GBM.pkl --path_to_save_features /nfs/turbo/umms-ukarvind/peijinhan/TCGA_tiles/TCGA_GBM
+python extract_tile_features_from_slides_ori.py --path_to_slides <turbo drive>/shared_data/TCGA-GBM_SVS_Raw --tile_coordinates <turbo drive>/<your name>/HE2RNA_code/tile_coordinates/tile_coordinates_TCGA_GBM.pkl --path_to_save_features <turbo drive>/<your name>/TCGA_tiles/TCGA_GBM
 
 ```
 Note that if you download the image using the manifest data in the previous step, please refer to the original github code for tile feature extraction!
@@ -81,7 +80,7 @@ Note that if you download the image using the manifest data in the previous step
 #### Download and preprocess RNAseq data
 Create a folder to store rnaseq data and download transcriptomes:
 ```bash
-cd /nfs/turbo/umms-ukarvind/peijinhan
+cd <turbo drive>/<your name>
 mkdir TCGA_transcriptome
 cd TCGA_transcriptome
 gdc-client download -m ../HE2RNA_code/gdc_manifests/gdc_manifest.2018-03-13_alltranscriptome.txt
@@ -92,14 +91,14 @@ gunzip */*.txt.gz
 ```
 To make things more convenient, we already save a file containing transcriptomes matched to whole-slide images, using
 ```bash
-cd /nfs/turbo/umms-ukarvind/peijinhan/HE2RNA_code
+cd <turbo drive>/<your name>/HE2RNA_code
 python transcriptome_data.py
 ```
 
 #### Supertile preprocessing (optional)
 Finally, once all previous steps have been performed, supertile preprocessing can be performed using the following command (the csv file containing transcriptome is used here to ensure consistency between preprocessed image samples and RNAseq data),
 ```bash
-python supertile_preprocessing.py --path_to_transcriptome /nfs/turbo/umms-ukarvind/peijinhan/TCGA_transcriptome/all_transcriptomes.csv --path_to_save_processed_data /nfs/turbo/umms-ukarvind/peijinhan/TCGA_100_supertiles.h5 --n_tiles 100
+python supertile_preprocessing.py --path_to_transcriptome <turbo drive>/<your name>/TCGA_transcriptome/all_transcriptomes.csv --path_to_save_processed_data <turbo drive>/<your name>/TCGA_100_supertiles.h5 --n_tiles 100
 
 ```
 
@@ -171,10 +170,10 @@ Once a model has been trained to predict the expression of genes specifically ex
 
 ```bash
 #LGG
-python spatialization.py --path_to_tile_features /nfs/turbo/umms-ukarvind/peijinhan/TCGA_tiles/TCGA_LGG/0.50_mpp/TCGA-HT-8113-01Z-00-DX1.npy -–path_to_slide /nfs/turbo/umms-ukarvind/shared_data/TCGA-LGG_SVS_Raw/TCGA-HT-8113-01Z-00-DX1.641F5405-47CF-41C6-8EA4-4ABD6C677A46.svs 
+python spatialization.py --path_to_tile_features <turbo drive>/<your name>/TCGA_tiles/TCGA_LGG/0.50_mpp/TCGA-HT-8113-01Z-00-DX1.npy -–path_to_slide <turbo drive>/shared_data/TCGA-LGG_SVS_Raw/TCGA-HT-8113-01Z-00-DX1.641F5405-47CF-41C6-8EA4-4ABD6C677A46.svs 
 
 #GBM
-python spatialization.py --path_to_tile_features /nfs/turbo/umms-ukarvind/peijinhan/TCGA_tiles/TCGA_GBM/0.50_mpp/TCGA-06-0152-01Z-00-DX9.npy -–path_to_slide /nfs/turbo/umms-ukarvind/shared_data/TCGA-GBM_SVS_Raw/c8cf5f17-f0ee-4587-a4e8-d3461f374cdc/TCGA-06-0152-01Z-00-DX9.8620b410-9d16-418e-88e1-b75c020da50a.svs
+python spatialization.py --path_to_tile_features <turbo drive>/<your name>/TCGA_tiles/TCGA_GBM/0.50_mpp/TCGA-06-0152-01Z-00-DX9.npy -–path_to_slide <turbo drive>/shared_data/TCGA-GBM_SVS_Raw/c8cf5f17-f0ee-4587-a4e8-d3461f374cdc/TCGA-06-0152-01Z-00-DX9.8620b410-9d16-418e-88e1-b75c020da50a.svs
 ```
 
 ## References
