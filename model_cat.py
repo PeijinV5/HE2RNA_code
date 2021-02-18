@@ -25,6 +25,7 @@ from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import confusion_matrix, classification_report
 
 
 class HE2RNA(nn.Module):
@@ -36,13 +37,13 @@ class HE2RNA(nn.Module):
         layers (list): List of the layers' dimensions
         nonlin (torch.nn.modules.activation)
         ks (list): list of numbers of highest-scored tiles to keep in each
-            channel.
+            channel/gene?
         dropout (float)
         device (str): 'cpu' or 'cuda'
         mode (str): 'binary' or 'regression'
     """
     def __init__(self, input_dim, output_dim,
-                 layers=[1], nonlin=nn.ReLU(), ks=[10],
+                 layers=[2], nonlin=nn.ReLU(), ks=[10],
                  dropout=0.5, device='cpu',
                  bias_init=None, mode='binary',**kwargs):
         super(HE2RNA, self).__init__()
@@ -70,21 +71,12 @@ class HE2RNA(nn.Module):
         self.to(self.device)
 
     def forward(self, x):
-        if self.training:
-            k = int(np.random.choice(self.ks))
-            return self.forward_fixed_k(x, k)
-        else:
-            pred = 0
-            for k in self.ks:
-                pred += self.forward_fixed_k(x, int(k)) / len(self.ks)
-            return pred
+        return self.forward_fixed(x) # torch.Size([16, 2, 100]). 
 
-    def forward_fixed_k(self, x, k):
-        mask, _ = torch.max(x, dim=1, keepdim=True)
+    def forward_fixed(self, x):
+        mask, _ = torch.max(x, dim=1, keepdim=True) # mask is the column vector that contains the max values for each row
         mask = (mask > 0).float()
-        x = self.conv(x) * mask
-        t, _ = torch.topk(x, k, dim=2, largest=True, sorted=True)
-        x = torch.sum(t * mask[:, :, :k], dim=2) / torch.sum(mask[:, :, :k], dim=2)
+        x = self.conv(x) * mask # torch.Size([16, 2, 100])
         return x
 
     def conv(self, x):
@@ -100,33 +92,28 @@ def training_epoch_cat(model, dataloader, optimizer):
     model.train()
     loss_fn = nn.CrossEntropyLoss()
     train_loss = []
-    train_acc=[]
     for x, y in tqdm(dataloader):
         x = x.float().to(model.device)
         y = y.to(model.device)
         pred = model(x).squeeze()
+        y=y.repeat(1,pred.shape[2])
         loss = loss_fn(pred, y)
-        acc=compute_acc(pred, y)
         train_loss += [loss.detach().cpu().numpy()]
-        train_acc += acc.item()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
     train_loss = np.mean(train_loss)
-    train_acc = np.mean(train_acc)
-    return train_loss, train_acc
+    return train_loss
 
 def compute_acc(labels, preds, projects):
-    # The input preds is before softmax
+    # labels: [28,1], preds: [28,1]
     metrics = []
     for project in np.unique(projects):
         for i in range(labels.shape[1]):
             y_true = labels[projects == project, i]
             if len(np.unique(y_true)) > 1:
                 y_pred = preds[projects == project, i]
-                y_pred_tag = torch.log_softmax(y_pred, dim = 1)
-                _, y_pred_tags = torch.max(y_pred_tag, dim = 1)
-                metrics.append(accuracy_score(y_true, y_pred_tags))
+                metrics.append(accuracy_score(y_true, y_pred))
     metrics = np.asarray(metrics)
     return np.mean(metrics)
 
@@ -139,15 +126,19 @@ def evaluate_cat(model, dataloader, projects):
     preds = []
     labels = []
     for x, y in dataloader:
-        pred = model(x.float().to(model.device)).squeeze()
+        output = model(x.float().to(model.device))
         labels += [y]
-        loss = loss_fn(pred, y.to(model.device))
+        y=y.repeat(1,output.shape[2])
+        loss = loss_fn(output, y.to(model.device)) #The loss function is based on 100 tiles
         valid_loss += [loss.detach().cpu().numpy()]
-        pred = nn.ReLU()(pred)
+        _, pred = torch.max(output, 1)
+        pred=torch.mean(pred.float(),axis=1)
+        pred=(pred>0.5).float()
         preds += [pred.detach().cpu().numpy()]
     valid_loss = np.mean(valid_loss)
     preds = np.concatenate(preds)
-    print(preds)
+    preds=np.reshape(preds,(len(preds),1))
+    preds=np.matrix(preds)
     labels = np.concatenate(labels)
     metrics = compute_acc(labels, preds, projects)
     return valid_loss, metrics
@@ -163,11 +154,17 @@ def predict(model, dataloader):
         pred = model(x.float().to(model.device))
         labels += [y]
         pred = nn.ReLU()(pred)
+        _, pred = torch.max(pred, 1)
+        pred=torch.mean(pred.float(),axis=1)
+        pred=(pred>0.5).float()
         preds += [pred.detach().cpu().numpy()]
     preds = np.concatenate(preds)
+    preds=np.reshape(preds,(len(preds),1))
+    preds=np.matrix(preds)
     labels = np.concatenate(labels)
+    labels=np.reshape(labels,(len(labels),1))
+    labels=np.matrix(labels)
     return preds, labels
-
 
 def fit(model,
         train_set,
@@ -177,7 +174,8 @@ def fit(model,
         optimizer=None,
         test_set=None,
         path=None,
-        logdir='./exp'):
+        logdir='./exp',
+        cross_validation_fold=None):
     """Fit the model and make prediction on evaluation set.
 
     Args:
@@ -249,7 +247,7 @@ def fit(model,
 
             epoch_since_best += 1
 
-            train_loss = training_epoch(model, train_loader, optimizer)
+            train_loss = training_epoch_cat(model, train_loader, optimizer)
             dic_loss = {'train_loss': train_loss}
 
             print('Epoch {}/{} - {:.2f}s'.format(
@@ -263,18 +261,23 @@ def fit(model,
                     model, valid_loader, valid_projects)
                 dic_loss['valid_loss'] = valid_loss
                 score = np.mean(scores)
-                writer.add_scalars('data/losses',
-                                   dic_loss,
-                                   e)
-                writer.add_scalar('data/metrics', score, e)
+                if cross_validation_fold is not None:
+                    writer.add_scalars('losses_runs_split{}'.format(cross_validation_fold),dic_loss,e)
+                    writer.add_scalar('metrics_runs_split{}'.format(cross_validation_fold),score, e)
+                else:
+                    writer.add_scalars('train_losses',dic_loss,e)
+                    writer.add_scalar('train_metrics', score, e)
+                
                 print('loss: {:.4f}, val loss: {:.4f}'.format(
                     train_loss,
                     valid_loss))
                 print('{}: {:.3f}'.format(metrics, score))
             else:
-                writer.add_scalars('data/losses',
-                                   dic_loss,
-                                   e)
+                if cross_validation_fold is not None:
+                    writer.add_scalars('losses_runs_split{}'.format(cross_validation_fold),dic_loss,e)
+                else:
+                    writer.add_scalars('train_losses',dic_loss,e)
+
                 print('loss: {:.4f}'.format(train_loss))
 
             if valid_set is not None:

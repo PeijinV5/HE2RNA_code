@@ -29,10 +29,11 @@ from torch.utils.data import Subset, DataLoader
 from torch import optim
 from sklearn.metrics import roc_auc_score
 from transcriptome_data import TranscriptomeDataset
-from wsi_data import load_labels, AggregatedDataset, TCGAFolder, \
+from wsi_data import load_labels_cat, AggregatedDataset, TCGAFolder, \
     H5Dataset, patient_split, match_patient_split, \
     patient_kfold, match_patient_kfold
 from model_cat import HE2RNA, fit, predict, compute_acc
+from utils import compute_metrics_acc
 
 class Experiment(object):
     """An class that uses a config file to setup and run a gene expression
@@ -158,9 +159,6 @@ class Experiment(object):
                     open(genes, 'rb'))
             else:
                 genes = genes.split(',')
-                for gene in genes:
-                    #assert gene.startswith('ENSG'), "Unknown gene format"
-                    pass
         else:
             genes = None
 
@@ -183,12 +181,12 @@ class Experiment(object):
 
             if dic['path_to_data'].endswith('.pkl'):
                 X = pkl.load(open(dic['path_to_data'], 'rb'))
-                y, genes, patients, projects = load_labels(transcriptome_data)
+                y, genes, patients, projects = load_labels_cat(transcriptome_data)
                 dataset = AggregatedDataset(
                     genes, patients, projects,
                     torch.Tensor(X), torch.Tensor(y))
             elif dic['path_to_data'].endswith('.h5'):
-                y, genes, patients, projects = load_labels(transcriptome_data)
+                y, genes, patients, projects = load_labels_cat(transcriptome_data)
                 dataset = H5Dataset(
                     genes, patients, projects, dic['path_to_data'], y)
 
@@ -217,7 +215,7 @@ class Experiment(object):
             model_params['input_dim'] = dataset.dim - 3
         else:
             model_params['input_dim'] = dataset.dim
-        model_params['output_dim'] = len(dataset.genes)
+        model_params['output_dim'] = len(dataset.genes)*2
 
         if self.split is None:
             train_idx, valid_idx, test_idx = patient_split(dataset, random_state)
@@ -261,18 +259,18 @@ class Experiment(object):
 
         else:
             # Initialize bias of the last layer with the average target value on the train set
-            try:
-                model_params['bias_init'] = torch.nn.Parameter(
-                    torch.Tensor(
-                        np.mean(
-                            [sample[1] for sample in train_set], axis=0)
-                        ).cuda())
-            except ValueError:
-                model_params['bias_init'] = torch.nn.Parameter(
-                    torch.Tensor(
-                        np.mean(
-                            [sample[1].numpy() for sample in train_set], axis=0)
-                        ).cuda())
+            # try:
+            #     model_params['bias_init'] = torch.nn.Parameter(
+            #         torch.Tensor(
+            #             np.mean(
+            #                 [sample[1] for sample in train_set], axis=0)
+            #             ).cuda())
+            # except ValueError:
+            #     model_params['bias_init'] = torch.nn.Parameter(
+            #         torch.Tensor(
+            #             np.mean(
+            #                 [sample[1].numpy() for sample in train_set], axis=0)
+            #             ).cuda())
             model = HE2RNA(**model_params)
         optimizer = self._setup_optimization(model)
 
@@ -291,7 +289,7 @@ class Experiment(object):
         for project in np.unique(test_projects):
             pred = preds[test_projects == project]
             label = labels[test_projects == project]
-            report['accuracy_' + project] = compute_acc(
+            report['accuracy_' + project] = compute_metrics_acc(
                 label, pred)
 
         report = pd.DataFrame(report)
@@ -318,7 +316,7 @@ class Experiment(object):
             model_params['input_dim'] = dataset.dim - 3
         else:
             model_params['input_dim'] = dataset.dim
-        model_params['output_dim'] = len(dataset.genes)
+        model_params['output_dim'] = len(dataset.genes)*2
 
         if self.subsample is not None:
             np.random.seed(random_state)
@@ -397,19 +395,19 @@ class Experiment(object):
                     model.do.p = model_params['dropout']
 
             else:
-                # Initialize bias of the last layer with the average target value on the train set
-                try:
-                    model_params['bias_init'] = torch.nn.Parameter(
-                        torch.Tensor(
-                            np.mean(
-                                [sample[1] for sample in train_set], axis=0)
-                        ).cuda())
-                except ValueError:
-                    model_params['bias_init'] = torch.nn.Parameter(
-                        torch.Tensor(
-                            np.mean(
-                                [sample[1].numpy() for sample in train_set], axis=0)
-                        ).cuda())
+                # # Initialize bias of the last layer with the average target value on the train set
+                # try:
+                #     model_params['bias_init'] = torch.nn.Parameter(
+                #         torch.Tensor(
+                #             np.mean(
+                #                 [sample[1] for sample in train_set], axis=0)
+                #         ).cuda())
+                # except ValueError:
+                #     model_params['bias_init'] = torch.nn.Parameter(
+                #         torch.Tensor(
+                #             np.mean(
+                #                 [sample[1].numpy() for sample in train_set], axis=0)
+                #         ).cuda())
                 model = HE2RNA(**model_params)
             optimizer = self._setup_optimization(model)
 
@@ -424,13 +422,14 @@ class Experiment(object):
                                 logdir=logdir,
                                 path=os.path.join(
                                     self.savedir,
-                                    'model_' + str(k)))
+                                    'model_' + str(k)),
+                                cross_validation_fold=k)
 
             # Compute metrics for each fold
             for project in np.unique(test_projects):
                 pred = preds[test_projects == project]
                 label = labels[test_projects == project]
-                report['accuracy_' + project + '_fold_' + str(k)] = compute_acc(
+                report['accuracy_' + project + '_fold_' + str(k)] = compute_metrics_acc(
                     label, pred)
 
         report = pd.DataFrame(report)

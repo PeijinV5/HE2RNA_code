@@ -72,7 +72,7 @@ class TranscriptomeDataset:
         else:
             transcriptomes = transcriptomes.loc[transcriptomes['Project.ID'].apply(
                 lambda x: x.replace('-', '_')).isin(projectname)]
-        genes = [col for col in transcriptomes.columns if col.startswith('ENSG')]
+        genes = [col for col in transcriptomes.columns]
         dataset = cls(projectname, genes)
         transcriptomes.sort_values('Sample.ID', inplace=True)
         transcriptomes.reset_index(inplace=True, drop=True)

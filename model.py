@@ -70,28 +70,39 @@ class HE2RNA(nn.Module):
         self.to(self.device)
 
     def forward(self, x):
+        print(self.training)
         if self.training:
             k = int(np.random.choice(self.ks))
-            return self.forward_fixed_k(x, k)
+            return self.forward_fixed_k(x, k) #this is the average score for each slide at k
         else:
             pred = 0
+            # This is calculating [S(1)+S(2)+S(5)+...+S(100)]/len(ks)
             for k in self.ks:
                 pred += self.forward_fixed_k(x, int(k)) / len(self.ks)
+            print(pred)
             return pred
 
     def forward_fixed_k(self, x, k):
-        mask, _ = torch.max(x, dim=1, keepdim=True)
+        print("This is x used for mask: ",x.shape) # torch.Size([16, 2048, 100])
+        mask, _ = torch.max(x, dim=1, keepdim=True) # 16*100 array 
         mask = (mask > 0).float()
         x = self.conv(x) * mask
+        print("This is x after times mask: ",x.shape) # torch.Size([16, 3, 100])
         t, _ = torch.topk(x, k, dim=2, largest=True, sorted=True)
+        print("This is t: ",t.shape) # torch.Size([16, 3, 100])
         x = torch.sum(t * mask[:, :, :k], dim=2) / torch.sum(mask[:, :, :k], dim=2)
+        print("This is x after average sum: ",x.shape) # torch.Size([16, 3]), this is the average score for each slide at k
         return x
 
     def conv(self, x):
+        print("this is x in conv: ", x.shape) #torch.Size([16, 2048, 100]), is this after permute?
         x = x[:, x.shape[1] - self.input_dim:]
+        print("this is x before conv: ", x.shape) #torch.Size([16, 2048, 100])
         for i in range(len(self.layers) - 1):
             x = self.do(self.nonlin(self.layers[i](x)))
+        print("this is x in 1 layer before: ", x.shape) #torch.Size([16, 3, 100])
         x = self.layers[-1](x)
+        print("this is x after conv: ", x.shape) #torch.Size([16, 3, 100])
         return x
 
 
@@ -120,6 +131,7 @@ def compute_correlations(labels, preds, projects):
     metrics = []
     for project in np.unique(projects):
         for i in range(labels.shape[1]):
+            print("This is the project in compute correlation: ",project)
             y_true = labels[projects == project, i]
             if len(np.unique(y_true)) > 1:
                 y_prob = preds[projects == project, i]
@@ -131,6 +143,7 @@ def compute_correlations(labels, preds, projects):
 def evaluate(model, dataloader, projects):
     """Evaluate the model on the validation set and return loss and metrics.
     """
+    print("This is the project: ",projects)
     model.eval()
     loss_fn = nn.MSELoss()
     valid_loss = []
@@ -141,7 +154,9 @@ def evaluate(model, dataloader, projects):
         labels += [y]
         loss = loss_fn(pred, y.float().to(model.device))
         valid_loss += [loss.detach().cpu().numpy()]
+        print('pred before RELU: ',pred)
         pred = nn.ReLU()(pred)
+        print('pred after RELU: ',pred)
         preds += [pred.detach().cpu().numpy()]
     valid_loss = np.mean(valid_loss)
     preds = np.concatenate(preds)
@@ -266,11 +281,11 @@ def fit(model,
                 print("evaluate scores is: ", scores)
                 score = np.mean(scores)
                 if cross_validation_fold is not None:
-                    writer.add_scalars('runs_split'.format(cross_validation_fold),'data/losses',dic_loss,e)
-                    writer.add_scalar('runs_split{}'.format(cross_validation_fold),'data/metrics', score, e)
+                    writer.add_scalars('losses_runs_split{}'.format(cross_validation_fold),dic_loss,e)
+                    writer.add_scalar('metrics_runs_split{}'.format(cross_validation_fold),score, e)
                 else:
-                    writer.add_scalars('data/losses',dic_loss,e)
-                    writer.add_scalar('data/metrics', score, e)
+                    writer.add_scalars('train_losses',dic_loss,e)
+                    writer.add_scalar('train_metrics', score, e)
 
                 print('loss: {:.4f}, val loss: {:.4f}'.format(
                     train_loss,
@@ -279,9 +294,9 @@ def fit(model,
             else:
 
                 if cross_validation_fold is not None:
-                    writer.add_scalars('runs_split{}'.format(cross_validation_fold),'data/losses',dic_loss,e)
+                    writer.add_scalars('losses_runs_split{}'.format(cross_validation_fold),dic_loss,e)
                 else:
-                    writer.add_scalars('data/losses',dic_loss,e)
+                    writer.add_scalars('train_losses',dic_loss,e)
 
                 print('loss: {:.4f}'.format(train_loss))
 

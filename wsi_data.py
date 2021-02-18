@@ -46,12 +46,29 @@ def load_labels(transcriptome_dataset):
 
     return y, genes, patients, projects
 
+def load_labels_cat(transcriptome_dataset):
+    """Clean up RNAseq data and return labels, genes and patients.
+    """
+    assert hasattr(transcriptome_dataset, 'transcriptomes'), \
+        "Transcriptomes have not been loaded for this dataset"
+
+    to_drop = ['Case.ID', 'Sample.ID', 'File.ID', 'Project.ID']
+    df = transcriptome_dataset.transcriptomes.copy()
+    patients = df['Case.ID'].values
+    projects = df['Project.ID']
+    df.drop(to_drop, axis=1, inplace=True)
+    genes = df.columns
+    y = df.values
+
+    return y, genes, patients, projects
+
 
 def load_and_aggregate_file(file, reduce=True):
     x = np.load(file)
-    x = x[:, 3:]
+    x = x[:, 3:] # make the column of x=2048
     if reduce:
-        x = np.mean(x, axis=0)
+        x = np.mean(x, axis=0) # row vector, length=2048
+        print("This is x after np.mean: ",x)
     else:
         x = np.concatenate((x, np.zeros((8000 - x.shape[0], 2048)))).transpose(1, 0)
     return x
@@ -97,7 +114,7 @@ class AggregatedDataset(TensorDataset):
         self.dim = 2048
 
     @classmethod
-    def match_transcriptome_data(cls, transcriptome_dataset):
+    def match_transcriptome_data(cls, transcriptome_dataset,binarize=True):
         """Use a TranscriptomeDataset object to read corresponding .npy files
         and aggregate tiles.
 
@@ -105,8 +122,12 @@ class AggregatedDataset(TensorDataset):
             transcriptome_dataset (TranscriptomeDataset)
             binarize (bool): If True, target gene expressions are binarized with
                 respect to their median value.
+
         """
-        y, cols, patients, projects = load_labels(transcriptome_dataset)
+        if binarize==True:
+            y, cols, patients, projects = load_labels_cat(transcriptome_dataset)
+        else:
+            y, cols, patients, projects = load_labels(transcriptome_dataset)
 
         file_list = [
             os.path.join(
@@ -118,7 +139,6 @@ class AggregatedDataset(TensorDataset):
         X = load_npy_data(file_list)
         return cls(cols, patients, projects, torch.Tensor(X), torch.Tensor(y))
 
-
 class ToTensor(object):
     """A simple transformation on numpy array to obtain torch-friendly tensors.
     """
@@ -127,9 +147,9 @@ class ToTensor(object):
 
     def __call__(self, sample):
         x = torch.from_numpy(sample).float()
-        if x.shape[0] > self.n_tiles:
+        if x.shape[0] > self.n_tiles: #if more than 8000, keep until 8000
             x = x[:self.n_tiles]
-        elif x.shape[0] < self.n_tiles:
+        elif x.shape[0] < self.n_tiles: # if less than 8000, padding with 0s
             x = torch.cat((x, torch.zeros((self.n_tiles - x.shape[0], 2051))))
         return x.t()
 
@@ -175,9 +195,14 @@ class TCGAFolder(Dataset):
         self.masks = masks
 
     @classmethod
-    def match_transcriptome_data(cls, transcriptome_dataset, binarize=False,genes=None):
+    def match_transcriptome_data(cls, transcriptome_dataset, binarize=True,genes=None):
         projectname = transcriptome_dataset.projectname
-        labels, cols, patients, projects = load_labels(transcriptome_dataset)
+
+        if binarize==True:
+            labels, cols, patients, projects = load_labels_cat(transcriptome_dataset)
+        else:
+            labels, cols, patients, projects = load_labels(transcriptome_dataset)
+
         file_list = [
             os.path.join(
                 PATH_TO_TILES, project.replace('-', '_'),

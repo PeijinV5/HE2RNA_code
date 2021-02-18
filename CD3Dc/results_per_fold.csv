@@ -1,0 +1,2 @@
+gene,accuracy_TCGA-LGG_fold_0,accuracy_TCGA-LGG_fold_1,accuracy_TCGA-LGG_fold_2,accuracy_TCGA-LGG_fold_3,accuracy_TCGA-LGG_fold_4
+CD3D_01,0.7559,0.7624,0.5918,0.75,0.6887

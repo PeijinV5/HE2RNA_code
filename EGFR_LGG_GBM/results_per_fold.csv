@@ -1,2 +1,2 @@
 gene,correlation_TCGA-GBM_fold_0,correlation_TCGA-LGG_fold_0,correlation_TCGA-GBM_fold_1,correlation_TCGA-LGG_fold_1,correlation_TCGA-GBM_fold_2,correlation_TCGA-LGG_fold_2,correlation_TCGA-GBM_fold_3,correlation_TCGA-LGG_fold_3,correlation_TCGA-GBM_fold_4,correlation_TCGA-LGG_fold_4
-ENSG00000146648.14,"(0.4059, 0.0546)","(0.0289, 0.747)","(0.2056, 0.3037)","(0.3829, 0.0001)","(0.3412, 0.0815)","(0.2972, 0.003)","(0.2256, 0.2069)","(0.2006, 0.0232)","(0.6269, 0.0018)","(0.2153, 0.0267)"
+ENSG00000146648.14,"(0.3194, 0.1373)","(0.0219, 0.8067)","(0.2153, 0.2809)","(0.1329, 0.1851)","(0.4032, 0.037)","(0.2631, 0.0089)","(0.2256, 0.2069)","(0.2006, 0.0232)","(0.5541, 0.0075)","(0.3606, 0.0001)"

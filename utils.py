@@ -25,7 +25,7 @@ def corr(pred, label, i):
     return round(stats.pearsonr(label[:, i], pred[:, i])[0],4), round(stats.pearsonr(label[:, i], pred[:, i])[1],4)
 
 def accuracy(pred, label, i):
-    return accuracy_score(label[:,i], y_pred[:,i])
+    return round(accuracy_score(label[:,i], pred[:,i]),4)
 
 def compute_metrics(label, pred):
     res = Parallel(n_jobs=16)(

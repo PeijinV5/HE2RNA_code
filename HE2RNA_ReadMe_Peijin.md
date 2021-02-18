@@ -25,7 +25,7 @@ pip install -r requirements1.txt
 env | grep cuda
 
 # Load module
-ml python3.7-anaconda/2020.02 cmake/3.17.3 cuda/11.0.2 cudnn/11.0-v8.0.1 gcc/8.2.0 Bioinformatics openslide
+ml Bioinformatics openslide
 
 # Manually build LibKMCUDA package (see https://github.com/src-d/kmcuda)
 git clone https://github.com/src-d/kmcuda
@@ -103,11 +103,11 @@ python supertile_preprocessing.py --path_to_transcriptome /nfs/turbo/umms-ukarvi
 
 ```
 
-## Gene expression prediction experiment (note that for now I only have LGG image data)
+## Gene expression prediction experiment
 
 To run an experiment, write first a config file or use one of the examples available in folder condigs. 
 
-* config_CD3_LGG.ini: prediction of CD3 genes on LGG, using all available tiles (8,000) per slide, and starting training from scratch!
+* config_CD3_LGG.ini: prediction of CD3 genes on LGG, using supertiles, and starting training from scratch!
 
 Launch experiment with a single train-test split:
 ```bash
@@ -115,8 +115,13 @@ python main.py --configs/config <config_file> --run single_run --logdir ./exp
 ```
 Launch cross-validation:
 ```bash
-python main.py --config configs/config_EGFR_LGG.ini --run cross_validation --n_folds 5 --logdir ./exp_gbm
-python main.py --config configs/config_CD3_LGG.ini --run cross_validation --n_folds 5 --logdir ./exp_cd3z
+python main.py --config configs/config_CD3_LGG.ini --run cross_validation --n_folds 5 --logdir ./exp_cd3_gbm_lgg
+python main.py --config configs/config_EGFR_LGG_GBM.ini --run cross_validation --n_folds 5 --logdir ./exp_egfr_gbm_lgg
+```
+
+Binary classification (example):
+```bash
+python main_cat.py --config configs/config_CD3_LGG_cat.ini --run cross_validation --n_folds 5 --logdir ./exp_cd3d_01
 ```
 Launch TensorboardX for visualizing training curves
 ```bash
@@ -167,7 +172,6 @@ Once a model has been trained to predict the expression of genes specifically ex
 ```bash
 #LGG
 python spatialization.py --path_to_tile_features /nfs/turbo/umms-ukarvind/peijinhan/TCGA_tiles/TCGA_LGG/0.50_mpp/TCGA-HT-8113-01Z-00-DX1.npy -–path_to_slide /nfs/turbo/umms-ukarvind/shared_data/TCGA-LGG_SVS_Raw/TCGA-HT-8113-01Z-00-DX1.641F5405-47CF-41C6-8EA4-4ABD6C677A46.svs 
-
 
 #GBM
 python spatialization.py --path_to_tile_features /nfs/turbo/umms-ukarvind/peijinhan/TCGA_tiles/TCGA_GBM/0.50_mpp/TCGA-06-0152-01Z-00-DX9.npy -–path_to_slide /nfs/turbo/umms-ukarvind/shared_data/TCGA-GBM_SVS_Raw/c8cf5f17-f0ee-4587-a4e8-d3461f374cdc/TCGA-06-0152-01Z-00-DX9.8620b410-9d16-418e-88e1-b75c020da50a.svs

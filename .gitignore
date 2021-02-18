@@ -6,3 +6,5 @@ tile_coordinates*
 *.sh
 slurm*
 test.py
+*.json
+*.pyc
